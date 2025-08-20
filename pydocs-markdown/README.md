@@ -18,7 +18,7 @@ This setup provides automated documentation generation for Python projects using
 
 ```bash
 # Install dependencies
-pip install pydoc-markdown[markdown] pylint pyyaml
+pip install pydoc-markdown pylint pyyaml
 
 # Create directory structure
 mkdir -p scripts docs/api .github/workflows
@@ -28,9 +28,9 @@ mkdir -p scripts docs/api .github/workflows
 
 Copy these files to your repository:
 
-1. **`scripts/generate_docs.py`** - The main documentation generator (from first artifact)
-2. **`pydoc-markdown.yml`** - Configuration file (from second artifact)
-3. **`.github/workflows/generate-docs.yml`** - GitHub Actions workflow (from third artifact)
+1. **`scripts/generate_docs.py`** - The main documentation generator
+2. **`pydoc-markdown.yml`** - Configuration file
+3. **`.github/workflows/generate-docs.yml`** - GitHub Actions workflow
 4. **`requirements-docs.txt`** - Documentation dependencies
 
 ### 3. Configure for Your Project
@@ -301,8 +301,8 @@ your-project/
 │       └── uml/
 ├── .github/
 │   └── workflows/
-│       └── generate-docs.yml
-├── pydoc-markdown.yml      # Configuration
+│       └── generate-docs.yaml
+├── pydoc-markdown.yaml      # Configuration
 └── requirements-docs.txt    # Documentation dependencies
 ```
 
