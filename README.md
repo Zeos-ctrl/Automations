@@ -1,0 +1,2 @@
+# Automations
+Make life simpler
