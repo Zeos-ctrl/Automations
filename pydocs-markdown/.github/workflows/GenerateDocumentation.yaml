@@ -1,0 +1,248 @@
+name: Generate Documentation
+
+on:
+  # Trigger on push to main branches
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.py'
+      - 'pydoc-markdown.yml'
+      - '.github/workflows/generate-docs.yml'
+      - 'scripts/generate_docs.py'
+  
+  # Trigger on pull requests
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.py'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      skip_uml:
+        description: 'Skip UML diagram generation'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Permissions needed for committing back to repo
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    
+    env:
+      SOURCE_DIR: src  # Adjust to your source directory
+      OUTPUT_DIR: docs/api
+      UML_DIR: docs/api/uml
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # Fetch full history for better git operations
+        fetch-depth: 0
+        # Use a PAT if you have branch protection rules
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: Install documentation dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pydoc-markdown[markdown]
+        pip install pylint  # For pyreverse (UML generation)
+        pip install pyyaml
+        
+        # Install your project dependencies (needed for proper import resolution)
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        elif [ -f pyproject.toml ]; then
+          pip install -e .
+        fi
+    
+    - name: Install Graphviz for UML
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y graphviz
+    
+    - name: Download documentation generator script
+      run: |
+        # Create scripts directory
+        mkdir -p scripts
+        
+        # Save the documentation generator script
+        cat > scripts/generate_docs.py << 'SCRIPT_EOF'
+        # Insert the full content of the Python script from the first artifact here
+        # For GitHub Actions, you would commit this script to your repo instead
+        SCRIPT_EOF
+    
+    - name: Generate documentation
+      run: |
+        # Set PYTHONPATH to include source directory
+        export PYTHONPATH="${{ github.workspace }}/${{ env.SOURCE_DIR }}:$PYTHONPATH"
+        
+        # Run the documentation generator
+        if [ "${{ inputs.skip_uml }}" == "true" ]; then
+          python scripts/generate_docs.py \
+            "${{ env.SOURCE_DIR }}" \
+            "${{ env.OUTPUT_DIR }}" \
+            --uml-dir "${{ env.UML_DIR }}" \
+            --no-uml
+        else
+          python scripts/generate_docs.py \
+            "${{ env.SOURCE_DIR }}" \
+            "${{ env.OUTPUT_DIR }}" \
+            --uml-dir "${{ env.UML_DIR }}"
+        fi
+    
+    - name: Check for documentation changes
+      id: check_changes
+      run: |
+        if git diff --quiet ${{ env.OUTPUT_DIR }}; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "No documentation changes detected"
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Documentation changes detected"
+          git diff --stat ${{ env.OUTPUT_DIR }}
+        fi
+    
+    - name: Commit documentation changes
+      if: steps.check_changes.outputs.has_changes == 'true' && github.event_name == 'push'
+      run: |
+        # Configure git
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Stage documentation files
+        git add ${{ env.OUTPUT_DIR }}
+        
+        # Create commit message
+        COMMIT_MSG="📚 Update documentation [skip ci]"
+        if [ -n "${{ github.event.head_commit.message }}" ]; then
+          COMMIT_MSG="$COMMIT_MSG
+
+        Auto-generated from commit: ${{ github.sha }}
+        Original message: ${{ github.event.head_commit.message }}"
+        fi
+        
+        # Commit changes
+        git commit -m "$COMMIT_MSG"
+        
+        # Push changes
+        git push
+    
+    - name: Upload documentation artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: documentation-${{ github.sha }}
+        path: ${{ env.OUTPUT_DIR }}
+        retention-days: 30
+    
+    - name: Comment on PR with documentation preview
+      if: github.event_name == 'pull_request' && steps.check_changes.outputs.has_changes == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Read the index file if it exists
+          const indexPath = path.join('${{ env.OUTPUT_DIR }}', 'index.md');
+          let indexContent = '';
+          if (fs.existsSync(indexPath)) {
+            indexContent = fs.readFileSync(indexPath, 'utf8');
+            // Truncate if too long
+            if (indexContent.length > 3000) {
+              indexContent = indexContent.substring(0, 3000) + '\n\n... (truncated)';
+            }
+          }
+          
+          const comment = `## Documentation Update
+          
+          Documentation has been generated for this pull request.
+          
+          ### Changes Summary
+          - Documentation generated for Python modules in \`${{ env.SOURCE_DIR }}\`
+          - Output location: \`${{ env.OUTPUT_DIR }}\`
+          - [Download artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### Documentation Index Preview
+          <details>
+          <summary>Click to expand</summary>
+          
+          \`\`\`markdown
+          ${indexContent}
+          \`\`\`
+          
+          </details>
+          
+          ---
+          *This comment was automatically generated by the documentation workflow.*`;
+          
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('## 📚 Documentation Update')
+          );
+          
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: comment
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+          }
+    
+    - name: Generate documentation summary
+      if: always()
+      run: |
+        echo "## Documentation Generation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -d "${{ env.OUTPUT_DIR }}" ]; then
+          echo "✅ Documentation generated successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Count generated files
+          MD_COUNT=$(find ${{ env.OUTPUT_DIR }} -name "*.md" | wc -l)
+          UML_COUNT=$(find ${{ env.UML_DIR }} -name "*.png" 2>/dev/null | wc -l)
+          
+          echo "### Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- Markdown files generated: $MD_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- UML diagrams generated: $UML_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Output Structure" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tree ${{ env.OUTPUT_DIR }} -I '__pycache__' || ls -la ${{ env.OUTPUT_DIR }}
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Documentation generation failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
