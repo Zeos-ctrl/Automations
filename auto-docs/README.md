@@ -18,7 +18,7 @@ This setup provides automated documentation generation for Python projects using
 
 ```bash
 # Install dependencies
-pip install pydoc-markdown pylint pyyaml
+pip install pylint pyyaml
 
 # Create directory structure
 mkdir -p scripts docs/api .github/workflows
@@ -29,7 +29,6 @@ mkdir -p scripts docs/api .github/workflows
 Copy these files to your repository:
 
 1. **`scripts/generate_docs.py`** - The main documentation generator
-2. **`pydoc-markdown.yml`** - Configuration file
 3. **`.github/workflows/generate-docs.yml`** - GitHub Actions workflow
 4. **`requirements-docs.txt`** - Documentation dependencies
 
@@ -56,9 +55,6 @@ env:
 ```bash
 # Generate documentation manually
 python scripts/generate_docs.py src docs/api
-
-# Or use the Makefile
-make -f Makefile.docs docs
 ```
 
 ## Usage
@@ -66,7 +62,7 @@ make -f Makefile.docs docs
 ### Automatic Generation
 
 Documentation is automatically generated when:
-- You push to `main` or `develop` branches
+- You push to `main` or `dev` branches
 - Python files are modified
 - You manually trigger the workflow
 
@@ -86,15 +82,6 @@ python scripts/generate_docs.py src docs/api --no-uml
 python scripts/generate_docs.py src docs/api \
   --include "**/*.py" \
   --exclude "test_*.py" "*_test.py"
-```
-
-### Using the Makefile
-
-```bash
-make -f Makefile.docs docs          # Generate with UML
-make -f Makefile.docs docs-no-uml   # Generate without UML
-make -f Makefile.docs docs-clean    # Clean generated docs
-make -f Makefile.docs docs-serve    # Serve docs locally
 ```
 
 ## Documentation Format
@@ -185,37 +172,6 @@ The workflow automatically:
    - Adjust paths and branches as needed
    - Add/remove trigger conditions
 
-## Advanced Configuration
-
-### Custom Templates
-
-Edit the renderer templates in `pydoc-markdown.yml`:
-
-```yaml
-renderer:
-  render_class_header_template: |
-    ## Class: {class_name}
-    **Inherits from:** {bases}
-```
-
-### Exclude Patterns
-
-```yaml
-filter:
-  exclude:
-    - "test_.*"
-    - ".*_test"
-    - "_internal.*"
-```
-
-### Multiple Source Directories
-
-```yaml
-loaders:
-  - type: python
-    search_path: [src, lib, utils]
-```
-
 ## Troubleshooting
 
 ### Common Issues
@@ -244,28 +200,7 @@ Run with verbose output:
 python scripts/generate_docs.py src docs/api --verbose
 ```
 
-Check pydoc-markdown directly:
-```bash
-pydoc-markdown -c pydoc-markdown.yml --verbose
-```
-
 ## Integration with Existing Documentation
-
-### Adding to MkDocs
-
-```yaml
-# mkdocs.yml
-nav:
-  - Home: index.md
-  - API Reference: api/index.md
-```
-
-### Adding to Sphinx
-
-```python
-# conf.py
-html_extra_path = ['../docs/api']
-```
 
 ### Adding to README
 
@@ -302,17 +237,11 @@ your-project/
 ├── .github/
 │   └── workflows/
 │       └── generate-docs.yaml
-├── pydoc-markdown.yaml      # Configuration
 └── requirements-docs.txt    # Documentation dependencies
 ```
-
-## License
-
-This documentation automation setup is provided as-is for use in your projects.
 
 ## Support
 
 For issues with:
-- **pydoc-markdown**: Check [pydoc-markdown documentation](https://pydoc-markdown.readthedocs.io/)
 - **pyreverse**: See [Pylint documentation](https://pylint.readthedocs.io/en/latest/pyreverse.html)
 - **GitHub Actions**: Refer to [GitHub Actions documentation](https://docs.github.com/en/actions)
